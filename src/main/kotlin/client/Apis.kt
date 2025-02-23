@@ -13,7 +13,7 @@ import io.ktor.websocket.*
 import java.io.File
 import java.io.FileInputStream
 
-// Modified client code
+// Modified client
 suspend fun uploadFiles(files: List<File>, onProgress: (Float) -> Unit)
 {
     val totalSize = files.sumOf { it.length() }
