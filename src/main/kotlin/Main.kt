@@ -1,6 +1,7 @@
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
@@ -79,206 +80,212 @@ fun App(
     println("Encoded ${getLocalIpAddress()} to $encodedIp")
     println("Decoded $encodedIp to ${decodeIp(encodedIp)}")
     MaterialTheme {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Text("Light Share", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(getLocalIpAddress() ?: "")
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(generateQRCode(encodedIp).toComposeImageBitmap(), "Qr Code for receiving file")
-                Spacer(Modifier.width(16.dp))
-                val first = encodedIp.substring(0, 4)
-                val last = encodedIp.substring(4, 8)
-                Column(
-                    Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "You can even join by using this code : $first-$last",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                    Text("You can skip dash if you wish", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            Spacer(Modifier.fillMaxWidth().height(16.dp))
-            Column(
-                Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
+        LazyColumn {
+            item {
 
-                Button({
-                    val files = browseFile()
-
-
-                    if (files != null)
-                    {
-                        fileMutableList.clear()
-                        fileMutableList.addAll(files.toMutableList())
-                        var fileNames = ""
-                        for (i in 0 until files.size)
-                        {
-                            fileNames += "\n ${i + 1}. ${files[i].name}"
-                        }
-                        selectedFiles = fileNames
-                    }
-                    else selectedFiles = ""
-                }) {
-                    if (selectedFiles.isNullOrBlank()) Text("Select Files to Send Someone")
-                    else Text("Cancel Current Selection and Select Another Files to Send")
-                }
-                Spacer(Modifier.fillMaxWidth().height(16.dp))
-                if (selectedFiles.isNotBlank())
-                {
+                Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    Text("Light Share", style = MaterialTheme.typography.headlineMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(getLocalIpAddress() ?: "")
                     Row(
-                        Modifier.padding(24.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        OutlinedTextField(modifier = Modifier.width(350.dp), value = code, onValueChange = {
-                            code = it
-                        }, label = {
-                            Text("Enter code of device to send files")
-                        }, isError = errorText.isNotBlank(), supportingText = {
-                            if (errorText.isNotBlank()) Text(errorText)
-                        })
+                        Image(generateQRCode(encodedIp).toComposeImageBitmap(), "Qr Code for receiving file")
                         Spacer(Modifier.width(16.dp))
-                        Button(
-                            {
-                                isSending.value = true
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    val deviceDetails = getDeviceDetails(client, decodeIp(code.replace("-", "")))
-                                    sendingTo.value = "${deviceDetails.deviceName} (${deviceDetails.os})"
-
-                                    noOfFiles = fileMutableList.size
-                                    var allFileSize = 0L
-                                    fileMutableList.forEach { allFileSize += it.length() }
-
-
-                                    uploadFilesWebsockets(
-                                        fileMutableList,
-                                        client,
-                                        decodeIp(code.replace("-", "")),
-                                        object : FileSentProgressListener
-                                        {
-                                            override fun report(percent: Int)
-                                            {
-                                                println("Sent $percent")
-                                                sendingProgress.value = percent.toFloat()
-                                            }
-
-                                        })
-                                    isSent.value = true
-
-                                }
-                            }, enabled = try
-                            {
-                                decodeIp(code.replace("-", ""))
-                                errorText = ""
-                                true
-                            }
-                            catch (e: Exception)
-                            {
-                                errorText = "Enter Valid Connection-Code"
-                                false
-                            }
-                        )
-
-                        {
-                            Text("Send Files")
+                        val first = encodedIp.substring(0, 4)
+                        val last = encodedIp.substring(4, 8)
+                        Column(
+                            Modifier.padding(24.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "You can even join by using this code : $first-$last",
+                                style = MaterialTheme.typography.headlineSmall
+                            )
+                            Text("You can skip dash if you wish", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                }
-                Text(selectedFiles)
-                if (isSending.value)
-                {
-                    sendUi(sendingProgress, noOfFiles)
-                }
-                if (isReceiving.value)
-                {
-                    receiveUi()
-                }
-                if (isSent.value)
-                {
-                    Dialog(
-                        onDismissRequest = {
-                            isSent.value = false
-                        },
+                    Spacer(Modifier.fillMaxWidth().height(16.dp))
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
 
-                    }
-                    AlertDialog(
-                        onDismissRequest = { isSent.value = false },
-                        title = {
-                            Text("Files sent to ${sendingTo.value}")
-                        },
-                        text = {
-                            Column(
-                                Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
+                        Button({
+                            val files = browseFile()
+
+
+                            if (files != null)
+                            {
+                                fileMutableList.clear()
+                                fileMutableList.addAll(files.toMutableList())
+                                var fileNames = ""
+                                for (i in 0 until files.size)
+                                {
+                                    fileNames += "\n ${i + 1}. ${files[i].name}"
+                                }
+                                selectedFiles = fileNames
+                            }
+                            else selectedFiles = ""
+                        }) {
+                            if (selectedFiles.isNullOrBlank()) Text("Select Files to Send Someone")
+                            else Text("Cancel Current Selection and Select Another Files to Send")
+                        }
+                        Spacer(Modifier.fillMaxWidth().height(16.dp))
+                        if (selectedFiles.isNotBlank())
+                        {
+                            Row(
+                                Modifier.padding(24.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    Icons.Rounded.CheckCircle,
-                                    "Done",
-                                    tint = Color(82, 146, 69),
-                                    modifier = Modifier.size(56.dp)
+                                OutlinedTextField(modifier = Modifier.width(350.dp), value = code, onValueChange = {
+                                    code = it
+                                }, label = {
+                                    Text("Enter code of device to send files")
+                                }, isError = errorText.isNotBlank(), supportingText = {
+                                    if (errorText.isNotBlank()) Text(errorText)
+                                })
+                                Spacer(Modifier.width(16.dp))
+                                Button(
+                                    {
+                                        isSending.value = true
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            val deviceDetails = getDeviceDetails(client, decodeIp(code.replace("-", "")))
+                                            sendingTo.value = "${deviceDetails.deviceName} (${deviceDetails.os})"
+
+                                            noOfFiles = fileMutableList.size
+                                            var allFileSize = 0L
+                                            fileMutableList.forEach { allFileSize += it.length() }
+
+
+                                            uploadFilesWebsockets(
+                                                fileMutableList,
+                                                client,
+                                                decodeIp(code.replace("-", "")),
+                                                object : FileSentProgressListener
+                                                {
+                                                    override fun report(percent: Int)
+                                                    {
+                                                        println("Sent $percent")
+                                                        sendingProgress.value = percent.toFloat()
+                                                    }
+
+                                                })
+                                            isSent.value = true
+
+                                        }
+                                    }, enabled = try
+                                    {
+                                        decodeIp(code.replace("-", ""))
+                                        errorText = ""
+                                        true
+                                    }
+                                    catch (e: Exception)
+                                    {
+                                        errorText = "Enter Valid Connection-Code"
+                                        false
+                                    }
                                 )
 
-                                Text("Files sent successfully.")
+                                {
+                                    Text("Send Files")
+                                }
                             }
-                        },
-                        confirmButton = {
-                            Button(onClick = { isSent.value = false }) {
-                                Text("OK")
+                        }
+                        Text(selectedFiles)
+                        if (isSending.value)
+                        {
+                            sendUi(sendingProgress, noOfFiles)
+                        }
+                        if (isReceiving.value)
+                        {
+                            receiveUi()
+                        }
+                        if (isSent.value)
+                        {
+                            Dialog(
+                                onDismissRequest = {
+                                    isSent.value = false
+                                },
+                            ) {
+
                             }
-                        })
-                }
-                if (isReceived.value)
-                {
-                    Dialog(
-                        onDismissRequest = {
-                            isReceived.value = false
-                        },
-                    ) {
+                            AlertDialog(
+                                onDismissRequest = { isSent.value = false },
+                                title = {
+                                    Text("Files sent to ${sendingTo.value}")
+                                },
+                                text = {
+                                    Column(
+                                        Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.Center,
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.CheckCircle,
+                                            "Done",
+                                            tint = Color(82, 146, 69),
+                                            modifier = Modifier.size(56.dp)
+                                        )
+
+                                        Text("Files sent successfully.")
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(onClick = { isSent.value = false }) {
+                                        Text("OK")
+                                    }
+                                })
+                        }
+                        if (isReceived.value)
+                        {
+                            Dialog(
+                                onDismissRequest = {
+                                    isReceived.value = false
+                                },
+                            ) {
+
+                            }
+                            AlertDialog(
+                                onDismissRequest = { isReceived.value = false },
+                                title = {
+                                    Text("Files received from ${receivingFrom.value}")
+                                },
+                                text = {
+                                    Column(
+                                        Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.Center,
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.CheckCircle,
+                                            "Done",
+                                            tint = Color(82, 146, 69),
+                                            modifier = Modifier.size(56.dp)
+                                        )
+                                        Text("Files received successfully.")
+                                    }
+
+                                },
+                                confirmButton = {
+                                    Button(onClick = { isReceived.value = false }) {
+                                        Text("OK")
+                                    }
+                                })
+                        }
 
                     }
-                    AlertDialog(
-                        onDismissRequest = { isReceived.value = false },
-                        title = {
-                            Text("Files received from ${receivingFrom.value}")
-                        },
-                        text = {
-                            Column(
-                                Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    Icons.Rounded.CheckCircle,
-                                    "Done",
-                                    tint = Color(82, 146, 69),
-                                    modifier = Modifier.size(56.dp)
-                                )
-                                Text("Files received successfully.")
-                            }
 
-                        },
-                        confirmButton = {
-                            Button(onClick = { isReceived.value = false }) {
-                                Text("OK")
-                            }
-                        })
+
                 }
-
             }
-
-
         }
+
     }
 }
 
@@ -342,7 +349,8 @@ fun getLocalIpAddress(): String?
                 val inetAddress = enumIpAddr.nextElement()
                 if (!inetAddress.isLoopbackAddress && inetAddress is java.net.Inet4Address)
                 { // Only IPv4, non-loopback
-                    return inetAddress.hostAddress
+//                    return inetAddress.hostAddress
+                    return "192.168.1.6"
                 }
             }
         }
