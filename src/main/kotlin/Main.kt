@@ -1,20 +1,24 @@
-//import androidx.compose.material3.icons.filled.FolderOpen
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import client.sendFileSize
-import client.uploadFiles2
+import client.FileSentProgressListener
+import client.client
+import client.getDeviceDetails
+import client.uploadFilesWebsockets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import server.startKtorServer
 import utils.decodeIp
@@ -27,12 +31,16 @@ import java.net.NetworkInterface
 import java.net.SocketException
 
 data class ReceivingUpdate(
-    val fileName: ArrayList<String> = ArrayList(), var percent: Int = 0
+    var fileName: ArrayList<String> = ArrayList(), var percent: Int = 0
 )
 
 var isReceiving = mutableStateOf(false)
-val receiving = mutableStateOf(ReceivingUpdate())
-
+var receivingFrom = mutableStateOf("")
+var sendingTo = mutableStateOf("")
+val receivingProgress = mutableStateOf(ReceivingUpdate())
+var isSending = mutableStateOf(false)
+var isSent = mutableStateOf(false)
+var isReceived = mutableStateOf(false)
 
 fun main() = application {
 
@@ -45,10 +53,8 @@ fun main() = application {
         exitApplication()
     }, title = "File Sharing App") {
         App(
-
         )
     }
-
     println("Encoded ${getLocalIpAddress()} to $encodedIp")
     println("Decoded $encodedIp to ${decodeIp(encodedIp)}")
 //    Test.testAllEncoding()
@@ -65,7 +71,7 @@ fun App(
     var selectedFiles by remember { mutableStateOf("") }
     var errorText by remember { mutableStateOf("") }
     var fileMutableList: MutableList<File> = remember { mutableListOf() }
-    var isSending by remember { mutableStateOf(false) }
+
     var sendingProgress = remember { mutableStateOf(0F) }
     var noOfFiles by remember { mutableStateOf(0) }
 
@@ -143,21 +149,31 @@ fun App(
                         Spacer(Modifier.width(16.dp))
                         Button(
                             {
-
-                                isSending = true
+                                isSending.value = true
                                 CoroutineScope(Dispatchers.IO).launch {
+                                    val deviceDetails = getDeviceDetails(client, decodeIp(code.replace("-", "")))
+                                    sendingTo.value = "${deviceDetails.deviceName} (${deviceDetails.os})"
+
                                     noOfFiles = fileMutableList.size
-//                                    uploadFiles(fileMutableList){
-//                                        sendingProgress.value=it
-//                                    }
                                     var allFileSize = 0L
                                     fileMutableList.forEach { allFileSize += it.length() }
-                                    sendFileSize(allFileSize)
 
-                                    uploadFiles2(fileMutableList) {
-                                        sendingProgress.value = it.toFloat()
-                                    }
-                                    isSending = false
+
+                                    uploadFilesWebsockets(
+                                        fileMutableList,
+                                        client,
+                                        decodeIp(code.replace("-", "")),
+                                        object : FileSentProgressListener
+                                        {
+                                            override fun report(percent: Int)
+                                            {
+                                                println("Sent $percent")
+                                                sendingProgress.value = percent.toFloat()
+                                            }
+
+                                        })
+                                    isSent.value = true
+
                                 }
                             }, enabled = try
                             {
@@ -178,14 +194,87 @@ fun App(
                     }
                 }
                 Text(selectedFiles)
-                if (isSending)
+                if (isSending.value)
                 {
-                    sendUiWithoutFileNames(sendingProgress, "Legion", noOfFiles)
+                    sendUi(sendingProgress, noOfFiles)
                 }
                 if (isReceiving.value)
                 {
-                    receiveUi("")
+                    receiveUi()
                 }
+                if (isSent.value)
+                {
+                    Dialog(
+                        onDismissRequest = {
+                            isSent.value = false
+                        },
+                    ) {
+
+                    }
+                    AlertDialog(
+                        onDismissRequest = { isSent.value = false },
+                        title = {
+                            Text("Files sent to ${sendingTo.value}")
+                        },
+                        text = {
+                            Column(
+                                Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Rounded.CheckCircle,
+                                    "Done",
+                                    tint = Color(82, 146, 69),
+                                    modifier = Modifier.size(56.dp)
+                                )
+
+                                Text("Files sent successfully.")
+                            }
+                        },
+                        confirmButton = {
+                            Button(onClick = { isSent.value = false }) {
+                                Text("OK")
+                            }
+                        })
+                }
+                if (isReceived.value)
+                {
+                    Dialog(
+                        onDismissRequest = {
+                            isReceived.value = false
+                        },
+                    ) {
+
+                    }
+                    AlertDialog(
+                        onDismissRequest = { isReceived.value = false },
+                        title = {
+                            Text("Files received from ${receivingFrom.value}")
+                        },
+                        text = {
+                            Column(
+                                Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Rounded.CheckCircle,
+                                    "Done",
+                                    tint = Color(82, 146, 69),
+                                    modifier = Modifier.size(56.dp)
+                                )
+                                Text("Files received successfully.")
+                            }
+
+                        },
+                        confirmButton = {
+                            Button(onClick = { isReceived.value = false }) {
+                                Text("OK")
+                            }
+                        })
+                }
+
             }
 
 
@@ -194,12 +283,12 @@ fun App(
 }
 
 @Composable
-fun receiveUi(receiversName: String)
+fun receiveUi()
 {
     Column(Modifier.fillMaxWidth()) {
-        Text("Receiving ${if (receiving.value.fileName.size == 1) "file" else "files"} from $receiversName")
+        Text("Receiving ${if (receivingProgress.value.fileName.size == 1) "file" else "files"} from ${receivingFrom.value}")
         LinearProgressIndicator({
-            receiving.value.percent.toFloat()
+            normalizeTheIndicator(receivingProgress.value.percent.toFloat())
         })
         var fileNames = ""
         val fileNameList = fileNames.toList()
@@ -212,34 +301,29 @@ fun receiveUi(receiversName: String)
 
 }
 
-@Composable
-fun sendUi(progress: MutableState<Float>, filesName: MutableList<String>, receiversName: String)
+fun normalizeTheIndicator(percent: Float): Float
 {
-    Column(Modifier.fillMaxWidth()) {
-        Text("Sending ${if (filesName.size == 1) "file" else "files"} to $receiversName")
-        LinearProgressIndicator({
-            progress.value
-        })
-        var fileNames = ""
-        val fileNameList = fileNames.toList()
-        for (i in fileNameList.indices)
-        {
-            fileNames += "\n ${i + 1}. ${fileNameList[i]}"
-        }
-        Text(fileNames, style = MaterialTheme.typography.bodyMedium)
-    }
-
+    return percent / 100
 }
 
+
 @Composable
-fun sendUiWithoutFileNames(progress: MutableState<Float>, receiversName: String, noOfFiles: Int)
+fun sendUi(progress: MutableState<Float>, noOfFiles: Int)
 {
     Column(Modifier.fillMaxWidth()) {
-        Text("Sending ${if (noOfFiles == 1) "file" else "files"} to $receiversName")
+        Text("Sending ${if (noOfFiles == 1) "file" else "files"} to ${sendingTo.value}")
         LinearProgressIndicator({
-            progress.value
+            normalizeTheIndicator(
+                progress.value
+            )
         })
-
+//        var fileNames = ""
+//        val fileNameList = fileNames.toList()
+//        for (i in fileNameList.indices)
+//        {
+//            fileNames += "\n ${i + 1}. ${fileNameList[i]}"
+//        }
+//        Text(fileNames, style = MaterialTheme.typography.bodyMedium)
     }
 
 }
@@ -280,10 +364,6 @@ fun browseFile(): Array<out File>?
 
     if (files.isNotEmpty()) return files
 
-//    if (directory != null && filename != null)
-//    {
-//        val file = File(directory, filename)
-//        return file
-//    }
+
     return null
 }
