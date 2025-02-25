@@ -349,8 +349,8 @@ fun getLocalIpAddress(): String?
                 val inetAddress = enumIpAddr.nextElement()
                 if (!inetAddress.isLoopbackAddress && inetAddress is java.net.Inet4Address)
                 { // Only IPv4, non-loopback
-//                    return inetAddress.hostAddress
-                    return "192.168.1.6"
+                    return inetAddress.hostAddress
+//                    return "192.168.1.6"
                 }
             }
         }

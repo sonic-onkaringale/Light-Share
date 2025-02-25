@@ -124,12 +124,12 @@ fun startKtorServer()
 {
     server = embeddedServer(
         Netty, port = 8888, host = "0.0.0.0"
-    ) { // "0.0.0.0" for all interfaces
-        module() // Your Ktor application module
-    }.start(wait = false) // Don't wait for server to stop in the main thread
+    ) {
+        module()
+    }.start(wait = false)
 }
 
-// Add memory logging to track improvements
+
 fun logMemory()
 {
     val runtime = Runtime.getRuntime()
