@@ -1,8 +1,9 @@
 package utils
 
 import Constants
-import com.alutrippers.lightshare.log.debug
-import com.alutrippers.lightshare.log.err
+import debug
+import err
+
 import java.math.BigDecimal
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

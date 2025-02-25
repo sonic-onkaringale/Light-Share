@@ -8,7 +8,7 @@ fun generateQRCode(content: String): Image
 {
     val qrCode = QRCode.ofSquares()
 //        .withColor(Colors.DEEP_SKY_BLUE) // Default is Colors.BLACK
-        .withSize(25) // Default is 25
+        .withSize(10) // Default is 25
         .build(content)
 
 
