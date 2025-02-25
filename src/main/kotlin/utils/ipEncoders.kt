@@ -4,7 +4,7 @@ import org.jetbrains.skia.Image
 import qrcode.QRCode
 
 
-fun generateQRCode(content: String, width: Int = 10000, height: Int = 10000): Image
+fun generateQRCode(content: String): Image
 {
     val qrCode = QRCode.ofSquares()
 //        .withColor(Colors.DEEP_SKY_BLUE) // Default is Colors.BLACK
