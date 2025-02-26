@@ -120,13 +120,15 @@ fun Application.module()
 }
 
 
-fun startKtorServer()
+fun startKtorServer(ip: String="0.0.0.0"): EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration>?
 {
+
     server = embeddedServer(
-        Netty, port = 8888, host = "0.0.0.0"
+        Netty, port = 8888, host = ip
     ) {
         module()
     }.start(wait = false)
+    return server
 }
 
 
