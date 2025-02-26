@@ -7,7 +7,10 @@ plugins {
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     kotlin("plugin.serialization") version "2.1.0"
+
+//    id("ir.mahozad.compose-exe-manifest")
 }
+
 
 group = "com.alutrippers"
 version = "1.0-SNAPSHOT"

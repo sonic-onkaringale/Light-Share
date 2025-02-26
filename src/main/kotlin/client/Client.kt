@@ -10,7 +10,7 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
 
-// Initialize Ktor HttpClient with WebSocket support
+
 val client = HttpClient(CIO) {
 
     install(ContentNegotiation) {

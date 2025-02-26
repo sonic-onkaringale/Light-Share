@@ -113,7 +113,7 @@ fun transferNBytes(input: InputStream, output: OutputStream, len: Int)
         }
         output.write(buffer, 0, n)
         remaining -= n
-    } // Optionally, flush the output stream.
+    }
     output.flush()
 }
 
@@ -130,9 +130,9 @@ fun transferNBytesSafe(
     var remaining = len
     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
 
-    // Optional: count consecutive zero reads
+
     var zeroReadCount = 0
-    val maxZeroReads = 12  // adjust as needed
+    val maxZeroReads = 12
 
     var bytesWrote = 0L
     while (remaining > 0)

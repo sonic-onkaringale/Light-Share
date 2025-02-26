@@ -3,19 +3,14 @@ package utils
 import Constants
 import debug
 import err
-
-import java.math.BigDecimal
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 fun convertIntTo4ByteArray(number: Int): ByteArray
 {
-    // Allocate a ByteBuffer with a fixed size of 4 bytes
     val buffer = ByteBuffer.allocate(4)
-    // (Optional) Set the desired byte order (default is BIG_ENDIAN)
     buffer.order(ByteOrder.BIG_ENDIAN)
     buffer.putInt(number)
-    // Retrieve the byte array
     val byteArray = buffer.array()
     return byteArray
 }

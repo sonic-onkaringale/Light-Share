@@ -14,13 +14,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import client.FileSentProgressListener
 import client.client
 import client.getDeviceDetails
 import client.uploadFilesWebsockets
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
+import kotlinx.coroutines.*
 import server.startKtorServer
 import utils.decodeIp
 import utils.encodeIp
@@ -28,12 +29,18 @@ import utils.generateQRCode
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
-import java.net.NetworkInterface
-import java.net.SocketException
 
 data class ReceivingUpdate(
     var fileName: ArrayList<String> = ArrayList(), var percent: Int = 0
 )
+
+var scope = CoroutineScope(Dispatchers.IO)
+var monitorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+var isChangeServer = mutableStateOf(true)
+var changedServerDueTo = mutableStateOf("")
+
+var currentIp = mutableStateOf("0.0.0.0")
+var currentNetworkName = mutableStateOf("All Interface")
 
 var isReceiving = mutableStateOf(false)
 var receivingFrom = mutableStateOf("")
@@ -43,22 +50,52 @@ var isSending = mutableStateOf(false)
 var isSent = mutableStateOf(false)
 var isReceived = mutableStateOf(false)
 
+var server: EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration>? = null
 fun main() = application {
 
-    startKtorServer()
+//    startServer()
 
-    val encodedIp = encodeIp(getLocalIpAddress()!!)
-
-    Window(onCloseRequest = {
-
-        exitApplication()
-    }, title = "File Sharing App") {
+    val windowState = rememberWindowState()
+    windowState.isMinimized = false
+    Window(
+        onCloseRequest = {
+            exitApplication()
+        }, title = "Light Share - File Sharing App",
+        state = windowState
+    ) {
         App(
         )
     }
-    println("Encoded ${getLocalIpAddress()} to $encodedIp")
-    println("Decoded $encodedIp to ${decodeIp(encodedIp)}")
+
 //    Test.testAllEncoding()
+}
+
+private fun startServer(ip: String = "0.0.0.0")
+{
+    stopServer()
+    server = startKtorServer(ip)
+    runBlocking {
+        server?.engine?.resolvedConnectors()?.forEach {
+            val hostIp = it.host
+            currentIp.value = hostIp
+
+            val encodedIp = encodeIp(hostIp)
+            println("Encoded $hostIp to $encodedIp")
+            println("Decoded $encodedIp to ${decodeIp(encodedIp)}")
+
+        }
+    }
+    monitorNetwork()
+
+}
+
+private fun stopServer()
+{
+    isReceiving.value=false
+    isSending.value=false
+
+    server?.stop(0, 0)
+    server = null
 }
 
 @Composable
@@ -68,7 +105,7 @@ fun App(
 )
 {
     var code by remember { mutableStateOf("") }
-    val encodedIp = encodeIp(getLocalIpAddress()!!)
+    val encodedIp = encodeIp(currentIp.value)
     var selectedFiles by remember { mutableStateOf("") }
     var errorText by remember { mutableStateOf("") }
     var fileMutableList: MutableList<File> = remember { mutableListOf() }
@@ -77,16 +114,19 @@ fun App(
     var noOfFiles by remember { mutableStateOf(0) }
 
 
-    println("Encoded ${getLocalIpAddress()} to $encodedIp")
-    println("Decoded $encodedIp to ${decodeIp(encodedIp)}")
+
     MaterialTheme {
+        if (isChangeServer.value)
+        {
+            changeServerUi()
+        }
         LazyColumn {
             item {
 
                 Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                     Text("Light Share", style = MaterialTheme.typography.headlineMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(getLocalIpAddress() ?: "")
+                    Text(currentIp.value)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
@@ -155,7 +195,8 @@ fun App(
                                     {
                                         isSending.value = true
                                         CoroutineScope(Dispatchers.IO).launch {
-                                            val deviceDetails = getDeviceDetails(client, decodeIp(code.replace("-", "")))
+                                            val deviceDetails =
+                                                getDeviceDetails(client, decodeIp(code.replace("-", "")))
                                             sendingTo.value = "${deviceDetails.deviceName} (${deviceDetails.os})"
 
                                             noOfFiles = fileMutableList.size
@@ -290,6 +331,92 @@ fun App(
 }
 
 @Composable
+fun changeServerUi()
+{
+    val allIpList = IpUtils.getNetworks()
+    AlertDialog(onDismissRequest = {},
+        confirmButton = {},
+        title = {
+            if (changedServerDueTo.value.isBlank())
+            {
+                Text("Pick network to bind on.")
+            }
+            else
+                Text(changedServerDueTo.value)
+
+        },
+        text = {
+            LazyColumn {
+
+                allIpList.forEachIndexed { index, it ->
+                    item {
+                        Card(modifier = Modifier.padding(4.dp), onClick = {
+                            currentNetworkName.value = it.name?:"Unknown Network"
+                            changedServerDueTo.value=""
+                            scope.launch {
+                                startServer(it.ip)
+                            }
+                            isChangeServer.value = false
+                        }) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                Row(Modifier.fillMaxWidth()) {
+                                    Text(it.name?:"Unknown Network")
+
+                                }
+                                Row(Modifier.fillMaxWidth()) {
+                                    Text(it.ip)
+                                    Spacer(Modifier.weight(1f))
+                                    if (it.isRecommended != null)
+                                    {
+                                        if (it.isRecommended!!)
+                                            Text("Recommended")
+                                        else
+                                            Text("Not Recommended")
+                                    }
+                                }
+                            }
+
+                        }
+                    }
+                }
+            }
+
+        }
+    )
+
+}
+
+fun monitorNetwork()
+{
+
+    println("Monitoring Started")
+    monitorScope.launch {
+        while (true)
+        {
+            val ips = IpUtils.getNetworks()
+            var got = false
+            ips.forEach {
+                if (it.name==currentNetworkName.value&&it.ip==currentIp.value)
+                {
+                    println("Monitoring Matched")
+                    got=true
+                }
+            }
+            if(!got)
+            {
+                println("Server Changed")
+                stopServer()
+                changedServerDueTo.value="Network Disconnected, Reselect the Network."
+                isChangeServer.value=true
+                break
+            }
+            delay(1000)
+        }
+    }
+}
+
+
+@Composable
 fun receiveUi()
 {
     Column(Modifier.fillMaxWidth()) {
@@ -335,32 +462,6 @@ fun sendUi(progress: MutableState<Float>, noOfFiles: Int)
 
 }
 
-fun getLocalIpAddress(): String?
-{
-    try
-    {
-        val en = NetworkInterface.getNetworkInterfaces()
-        while (en.hasMoreElements())
-        {
-            val intf = en.nextElement()
-            val enumIpAddr = intf.inetAddresses
-            while (enumIpAddr.hasMoreElements())
-            {
-                val inetAddress = enumIpAddr.nextElement()
-                if (!inetAddress.isLoopbackAddress && inetAddress is java.net.Inet4Address)
-                { // Only IPv4, non-loopback
-//                    return inetAddress.hostAddress
-                    return "192.168.1.6"
-                }
-            }
-        }
-    }
-    catch (ex: SocketException)
-    {
-        ex.printStackTrace()
-    }
-    return null
-}
 
 fun browseFile(): Array<out File>?
 {
