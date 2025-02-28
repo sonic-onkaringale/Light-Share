@@ -2,7 +2,9 @@ import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,6 +12,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Window
@@ -19,6 +23,9 @@ import client.FileSentProgressListener
 import client.client
 import client.getDeviceDetails
 import client.uploadFilesWebsockets
+import com.dokar.sonner.ToastType
+import com.dokar.sonner.Toaster
+import com.dokar.sonner.rememberToasterState
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import kotlinx.coroutines.*
@@ -50,11 +57,11 @@ var isSending = mutableStateOf(false)
 var isSent = mutableStateOf(false)
 var isReceived = mutableStateOf(false)
 
+
 var server: EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration>? = null
 fun main() = application {
 
-//    startServer()
-
+//    Test.testAllEncoding()
     val windowState = rememberWindowState()
     windowState.isMinimized = false
     Window(
@@ -67,7 +74,7 @@ fun main() = application {
         )
     }
 
-//    Test.testAllEncoding()
+
 }
 
 private fun startServer(ip: String = "0.0.0.0")
@@ -91,8 +98,8 @@ private fun startServer(ip: String = "0.0.0.0")
 
 private fun stopServer()
 {
-    isReceiving.value=false
-    isSending.value=false
+    isReceiving.value = false
+    isSending.value = false
 
     server?.stop(0, 0)
     server = null
@@ -104,6 +111,7 @@ fun App(
 
 )
 {
+    val toaster = rememberToasterState()
     var code by remember { mutableStateOf("") }
     val encodedIp = encodeIp(currentIp.value)
     var selectedFiles by remember { mutableStateOf("") }
@@ -112,6 +120,12 @@ fun App(
 
     var sendingProgress = remember { mutableStateOf(0F) }
     var noOfFiles by remember { mutableStateOf(0) }
+    val clipboardManager = LocalClipboardManager.current
+
+    var isEnabledSendFile by remember { mutableStateOf(true) }
+
+
+
 
 
 
@@ -120,6 +134,10 @@ fun App(
         {
             changeServerUi()
         }
+        Toaster(
+            state = toaster,
+            alignment = Alignment.TopEnd, richColors = true
+        )
         LazyColumn {
             item {
 
@@ -141,10 +159,32 @@ fun App(
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                "You can even join by using this code : $first-$last",
-                                style = MaterialTheme.typography.headlineSmall
-                            )
+                            Row(
+                                Modifier.padding(4.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SelectionContainer {
+                                    Text(
+                                        "Your Connection Code : $first-$last",
+                                        style = MaterialTheme.typography.headlineSmall
+                                    )
+                                }
+                                IconButton(
+                                    {
+                                        toaster.show("Code Copied to Clipboard")
+                                        val annotatedString = AnnotatedString(encodedIp)
+                                        clipboardManager.setText(annotatedString)
+
+
+                                    },
+                                    modifier = Modifier.padding(4.dp)
+
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, "Copy Code")
+                                }
+                            }
+
                             Text("You can skip dash if you wish", style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -158,9 +198,16 @@ fun App(
                         Button({
                             val files = browseFile()
 
-
                             if (files != null)
                             {
+                                for (file in files)
+                                {
+                                    if (!file.isFile)
+                                    {
+                                        toaster.show("Invalid File Selected", type = ToastType.Error)
+                                        return@Button
+                                    }
+                                }
                                 fileMutableList.clear()
                                 fileMutableList.addAll(files.toMutableList())
                                 var fileNames = ""
@@ -184,7 +231,7 @@ fun App(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 OutlinedTextField(modifier = Modifier.width(350.dp), value = code, onValueChange = {
-                                    code = it
+                                    code = it.uppercase()
                                 }, label = {
                                     Text("Enter code of device to send files")
                                 }, isError = errorText.isNotBlank(), supportingText = {
@@ -193,30 +240,56 @@ fun App(
                                 Spacer(Modifier.width(16.dp))
                                 Button(
                                     {
-                                        isSending.value = true
+                                        isEnabledSendFile = false
                                         CoroutineScope(Dispatchers.IO).launch {
                                             val deviceDetails =
-                                                getDeviceDetails(client, decodeIp(code.replace("-", "")))
-                                            sendingTo.value = "${deviceDetails.deviceName} (${deviceDetails.os})"
+                                                try
+                                                {
 
+                                                    getDeviceDetails(client, decodeIp(code.replace("-", "")))
+
+                                                }
+                                                catch (e: Exception)
+                                                {
+                                                    isReceiving.value = false
+                                                    isSending.value = false
+                                                    isEnabledSendFile = true
+                                                    toaster.show("Failed to connect.", type = ToastType.Error)
+                                                    return@launch
+                                                }
+                                            sendingTo.value = "${deviceDetails.deviceName} (${deviceDetails.os})"
+                                            isSending.value = true
                                             noOfFiles = fileMutableList.size
                                             var allFileSize = 0L
                                             fileMutableList.forEach { allFileSize += it.length() }
 
 
-                                            uploadFilesWebsockets(
-                                                fileMutableList,
-                                                client,
-                                                decodeIp(code.replace("-", "")),
-                                                object : FileSentProgressListener
-                                                {
-                                                    override fun report(percent: Int)
-                                                    {
-                                                        println("Sent $percent")
-                                                        sendingProgress.value = percent.toFloat()
-                                                    }
+                                            try
+                                            {
 
-                                                })
+                                                uploadFilesWebsockets(
+                                                    fileMutableList,
+                                                    client,
+                                                    decodeIp(code.replace("-", "")),
+                                                    object : FileSentProgressListener
+                                                    {
+                                                        override fun report(percent: Int)
+                                                        {
+                                                            println("Sent $percent")
+                                                            sendingProgress.value = percent.toFloat()
+                                                        }
+
+                                                    })
+                                                isEnabledSendFile = true
+
+                                            }
+                                            catch (e: Exception)
+                                            {
+                                                isReceiving.value = false
+                                                isSending.value = false
+                                                isEnabledSendFile = true
+                                                toaster.show(e.message ?: "Error Occurred", type = ToastType.Error)
+                                            }
                                             isSent.value = true
 
                                         }
@@ -224,7 +297,7 @@ fun App(
                                     {
                                         decodeIp(code.replace("-", ""))
                                         errorText = ""
-                                        true
+                                        isEnabledSendFile
                                     }
                                     catch (e: Exception)
                                     {
@@ -252,6 +325,7 @@ fun App(
                             Dialog(
                                 onDismissRequest = {
                                     isSent.value = false
+
                                 },
                             ) {
 
@@ -280,6 +354,10 @@ fun App(
                                 confirmButton = {
                                     Button(onClick = { isSent.value = false }) {
                                         Text("OK")
+                                        code = ""
+                                        selectedFiles = ""
+                                        fileMutableList.clear()
+
                                     }
                                 })
                         }
@@ -351,8 +429,8 @@ fun changeServerUi()
                 allIpList.forEachIndexed { index, it ->
                     item {
                         Card(modifier = Modifier.padding(4.dp), onClick = {
-                            currentNetworkName.value = it.name?:"Unknown Network"
-                            changedServerDueTo.value=""
+                            currentNetworkName.value = it.name ?: "Unknown Network"
+                            changedServerDueTo.value = ""
                             scope.launch {
                                 startServer(it.ip)
                             }
@@ -360,7 +438,7 @@ fun changeServerUi()
                         }) {
                             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                 Row(Modifier.fillMaxWidth()) {
-                                    Text(it.name?:"Unknown Network")
+                                    Text(it.name ?: "Unknown Network")
 
                                 }
                                 Row(Modifier.fillMaxWidth()) {
@@ -396,18 +474,18 @@ fun monitorNetwork()
             val ips = IpUtils.getNetworks()
             var got = false
             ips.forEach {
-                if (it.name==currentNetworkName.value&&it.ip==currentIp.value)
+                if (it.name == currentNetworkName.value && it.ip == currentIp.value)
                 {
-                    println("Monitoring Matched")
-                    got=true
+//                    println("Monitoring Matched")
+                    got = true
                 }
             }
-            if(!got)
+            if (!got)
             {
                 println("Server Changed")
                 stopServer()
-                changedServerDueTo.value="Network Disconnected, Reselect the Network."
-                isChangeServer.value=true
+                changedServerDueTo.value = "Network Disconnected, Reselect the Network."
+                isChangeServer.value = true
                 break
             }
             delay(1000)
@@ -466,8 +544,8 @@ fun sendUi(progress: MutableState<Float>, noOfFiles: Int)
 fun browseFile(): Array<out File>?
 {
     val fileDialog = FileDialog(null as Frame?, "Choose a file to share", FileDialog.LOAD)
-    fileDialog.isVisible = true
     fileDialog.isMultipleMode = true
+    fileDialog.isVisible = true
 
     val files = fileDialog.files
 

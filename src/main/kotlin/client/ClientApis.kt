@@ -70,45 +70,55 @@ suspend fun uploadFilesWebsockets(
     val totalSize = files.sumOf { it.length() }
     var totalBytesSent = 0L
     var flag = false
-    client.webSocket("ws://$ip:8888/uploadFilesWs")
+    try
     {
-        sendSerialized(DeviceInfo(getDeviceName(), getOS()))
-        val filesMetadata = FilesMetaData(files.map {
-            FileMetaData(it.name, it.length(), calculateNumberOfSlices(it.length()))
-        })
-        sendSerialized(filesMetadata)
-        flush()
-        var buffer: ByteArray = ByteArray(Constants.Buffer.fileBuffer.toInt())
-        files.forEachIndexed { index: Int, file: File ->
-            val inputStream = file.inputStream()
-            for (i in 0 until filesMetadata.metaData[index].bytesSlicesRequired)
-            {
-                if (i.toInt() % 10 == 0)
-                {
-                    println("Calling gc")
-                    System.gc()
-                }
-                val bytesRead = inputStream.read(buffer)
 
-                val data = BytePacket(buffer, bytesRead)
-                if (!flag)
+        client.webSocket("ws://$ip:8888/uploadFilesWs")
+        {
+            sendSerialized(DeviceInfo(getDeviceName(), getOS()))
+            val filesMetadata = FilesMetaData(files.map {
+                FileMetaData(it.name, it.length(), calculateNumberOfSlices(it.length()))
+            })
+            sendSerialized(filesMetadata)
+            flush()
+            var buffer: ByteArray = ByteArray(Constants.Buffer.fileBuffer.toInt())
+            files.forEachIndexed { index: Int, file: File ->
+                val inputStream = file.inputStream()
+                for (i in 0 until filesMetadata.metaData[index].bytesSlicesRequired)
                 {
+                    if (i.toInt() % 10 == 0)
+                    {
+                        println("Calling gc")
+                        System.gc()
+                    }
+                    val bytesRead = inputStream.read(buffer)
+
+                    val data = BytePacket(buffer, bytesRead)
+                    if (!flag)
+                    {
 //                    println(Json.encodeToString(data))
-                    flag = true
-                }
-                sendSerialized(data)
-                flush()
+                        flag = true
+                    }
+                    sendSerialized(data)
+                    flush()
 
-                //
-                totalBytesSent += bytesRead
-                fileSentProgressListener.report(((totalBytesSent * 100) / totalSize).toInt())
+                    //
+                    totalBytesSent += bytesRead
+                    fileSentProgressListener.report(((totalBytesSent * 100) / totalSize).toInt())
+                }
+                System.gc()
             }
             System.gc()
+            flush()
+            isReceiving.value = false
+            isSending.value = false
         }
-        System.gc()
-        flush()
-        isReceiving.value = false
-        isSending.value = false
+    }
+    catch (e: Exception)
+    {
+        println(e.stackTrace)
+
+        throw RuntimeException("Failed to connect")
     }
 }
 
@@ -117,6 +127,14 @@ suspend fun getDeviceDetails(
     ip: String,
 ): DeviceInfo
 {
-    val response = client.get("http://$ip:8888/getDeviceDetails")
+    val response = try
+    {
+        client.get("http://$ip:8888/getDeviceDetails")
+    }
+    catch (e: Exception)
+    {
+        println("Failed to connect")
+        throw e
+    }
     return response.body<DeviceInfo>()
 }
