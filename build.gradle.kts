@@ -8,7 +8,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     kotlin("plugin.serialization") version "2.1.0"
 
-//    id("ir.mahozad.compose-exe-manifest")
 }
 
 
@@ -22,6 +21,9 @@ repositories {
 }
 
 dependencies {
+
+    //Toaster
+    implementation("io.github.dokar3:sonner:0.3.8")
 
 
     implementation("io.github.g0dkar:qrcode-kotlin:4.1.1")
