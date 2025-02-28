@@ -108,11 +108,11 @@ fun Application.module()
                     println("File Not Size Matched : ${fileMetaData.fileName} - Expected : ${fileMetaData.fileSize} but got : $bytesWrote")
                 println()
                 fileOutputStream.close()
-                isReceiving.value = false
-                isSending.value = false
-                isReceived.value=true
-            }
 
+            }
+            isReceiving.value = false
+            isSending.value = false
+            isReceived.value=true
             println("BytesToReceive :  $totalBytesToReceive, ByteReceived : $totalBytesReceived")
             close(CloseReason(CloseReason.Codes.NORMAL, "File Received"))
         }
