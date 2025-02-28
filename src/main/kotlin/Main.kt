@@ -38,7 +38,7 @@ import java.awt.Frame
 import java.io.File
 
 data class ReceivingUpdate(
-    var fileName: ArrayList<String> = ArrayList(), var percent: Int = 0
+    var fileName: ArrayList<String> = ArrayList(), var percent: MutableState<Int> = mutableStateOf(0)
 )
 
 var scope = CoroutineScope(Dispatchers.IO)
@@ -500,7 +500,7 @@ fun receiveUi()
     Column(Modifier.fillMaxWidth()) {
         Text("Receiving ${if (receivingProgress.value.fileName.size == 1) "file" else "files"} from ${receivingFrom.value}")
         LinearProgressIndicator({
-            normalizeTheIndicator(receivingProgress.value.percent.toFloat())
+            normalizeTheIndicator(receivingProgress.value.percent.value.toFloat())
         })
         var fileNames = ""
         val fileNameList = fileNames.toList()

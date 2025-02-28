@@ -98,7 +98,7 @@ fun Application.module()
                     totalBytesReceived += bytePacket.dataRead
                     println("File percent ${(totalBytesReceived * 100) / totalBytesToReceive}")
 
-                    receivingProgress.value.percent = ((totalBytesReceived * 100) / totalBytesToReceive).toInt()
+                    receivingProgress.value.percent.value = ((totalBytesReceived * 100) / totalBytesToReceive).toInt()
 
                 }
 
